@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VakyaAI — Professional Hindi PDF Translator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --bg-app: #020617; --bg-card: rgba(15, 23, 42, 0.7);
+  --text-main: #f1f5f9; --text-muted: #94a3b8; --text-dim: #64748b;
+  --accent: #38bdf8; --accent-glow: rgba(56, 189, 248, 0.25);
+  --border: rgba(148, 163, 184, 0.1);
+  --success: #34d399; --error: #f87171;
+}
+
+/* --- BASE & RESET --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg-app);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --- AMBIENT BACKGROUND --- */
+.bg-grid {
+  position: fixed; inset: 0; z-index: -1;
+  background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, var(--bg-app) 70%);
+}
+.bg-grid::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+              radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+  animation: drift 30s ease-in-out infinite alternate;
+}
+@keyframes drift { to { transform: translate(-20px, 20px); } }
+
+/* --- NAVBAR --- */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  padding: 1rem 2rem;
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(2, 6, 23, 0.8);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--text-main); }
+.logo-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); display: flex; align-items: center; justify-content: center; font-weight: 900; color: white; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+.logo-text { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; }
+.nav-links a { color: var(--text-muted); text-decoration: none; margin-left: 2rem; font-weight: 500; transition: color 0.2s; font-size: 0.9rem; }
+.nav-links a:hover { color: var(--accent); }
+
+/* --- HERO --- */
+.hero {
+  min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 8rem 2rem 4rem;
+}
+.badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 100px; color: var(--accent); font-size: 0.8rem; font-weight: 600; margin-bottom: 2rem; }
+h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 900; line-height: 1.1; letter-spacing: -2px; margin-bottom: 1.5rem; }
+h1 span { background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero-p { max-width: 600px; color: var(--text-muted); line-height: 1.7; margin-bottom: 2.5rem; font-size: 1.1rem; }
+
+/* --- MAIN APP CONTAINER --- */
+.container { max-width: 800px; margin: 0 auto 4rem; padding: 0 1.5rem; }
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 2.5rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+}
+
+/* --- UPLOAD UI --- */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 16px; padding: 3rem 2rem; text-align: center;
+  transition: all 0.3s; cursor: pointer; position: relative;
+  background: rgba(255, 255, 255, 0.01);
+}
+.upload-zone:hover { border-color: var(--accent); background: rgba(56, 189, 248, 0.03); }
+.upload-zone.dragging { border-color: var(--accent); background: rgba(56, 189, 248, 0.08); transform: scale(1.01); }
+.file-input { display: none; } /* Hidden but functional */
+.upload-icon { width: 64px; height: 64px; background: rgba(56, 189, 248, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 1.8rem; color: var(--accent); }
+.upload-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+.upload-sub { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+
+.browse-btn {
+  display: inline-block; padding: 0.8rem 1.8rem; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border);
+  color: var(--text-main); font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.browse-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); box-shadow: 0 4px 15px var(--accent-glow); }
+
+.file-info { display: none; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+.file-info.active { display: flex; align-items: center; gap: 1rem; text-align: left; }
+.file-thumb { width: 48px; height: 48px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 1.2rem; flex-shrink: 0; }
+.file-details h4 { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.file-details p { font-size: 0.8rem; color: var(--text-muted); }
+.remove-btn { margin-left: auto; padding: 0.5rem; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2rem; transition: color 0.2s; }
+.remove-btn:hover { color: var(--error); }
+
+.start-btn {
+  width: 100%; padding: 1.2rem; margin-top: 2rem; border-radius: 14px;
+  background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+  border: none; color: white; font-weight: 800; font-size: 1rem; cursor: pointer;
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.3);
+  transition: transform 0.2s, opacity 0.2s; opacity: 0.5; pointer-events: none;
+}
+.start-btn.active { opacity: 1; pointer-events: all; }
+.start-btn.active:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(14, 165, 233, 0.4); }
+.start-btn.active:active { transform: translateY(0); }
+
+/* --- PROCESSING UI --- */
+.process-ui { display: none; }
+.process-ui.active { display: block; }
+.status-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.status-text h3 { font-size: 1.2rem; font-weight: 700; }
+.status-text p { color: var(--text-muted); font-size: 0.85rem; }
+
+.progress-track { height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 1rem; }
+.progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #818cf8); transition: width 0.3s ease; }
+
+.log-area { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 1rem; font-family: monospace; font-size: 0.8rem; color: var(--text-muted); max-height: 180px; overflow: hidden; position: relative; margin-top: 2rem; }
+.log-area::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, rgba(0,0,0,0.2)); pointer-events: none; }
+.log-entry { opacity: 0.6; margin-bottom: 4px; }
+.log-entry.latest { opacity: 1; color: var(--text-main); }
+
+/* --- RESULT UI --- */
+.result-ui { display: none; text-align: center; }
+.result-ui.active { display: block; }
+.result-icon { width: 80px; height: 80px; background: rgba(52, 211, 153, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 2rem; font-size: 2.5rem; color: var(--success); border: 2px solid var(--success); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+.result-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+.result-sub { color: var(--text-muted); margin-bottom: 2rem; }
+.download-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 1.2rem; border-radius: 14px; background: var(--success); color: #022c22; font-weight: 800; font-size: 1rem; border: none; cursor: pointer; margin-bottom: 1rem; transition: transform 0.2s; }
+.download-btn:hover { transform: translateY(-2px); }
+.reset-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; text-decoration: underline; margin-top: 0.5rem; }
+
+/* --- FOOTER --- */
+.footer { text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 4rem; }
+
+/* --- RESPONSIVE --- */
+@media (max-width: 640px) {
+  .nav { padding: 1rem; }
+  .nav-links { display: none; }
+  .card { padding: 1.5rem; }
+  h1 { font-size: 2rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<nav class="nav">
+  <a href="#" class="logo">
+    <div class="logo-icon">V</div>
+    <div class="logo-text">VakyaAI</div>
+  </a>
+  <div class="nav-links">
+    <a href="#tool">Translator</a>
+    <a href="#features">Features</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="badge">Next-Gen Hindi PDF Engine</div>
+  <h1>Perfect Hindi PDFs,<br/><span>Instantly Translated.</span></h1>
+  <p class="hero-p">Upload any English PDF. We rebuild it page-by-page into a professional Hindi document with perfect margins, flow, and formatting.</p>
+</section>
+
+<section class="container" id="tool">
+  <div class="card">
+    
+    <!-- STATE 1: UPLOAD -->
+    <div id="ui-upload">
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" class="file-input" accept=".pdf"/>
+        <div class="upload-icon">📄</div>
+        <h3 class="upload-title">Drop your English PDF here</h3>
+        <p class="upload-sub">or click the button below to browse files</p>
+        
+        <!-- Fixed Button: Label acts as trigger for hidden input -->
+        <label for="fileInput" class="browse-btn">
+          Choose PDF File
+        </label>
+      </div>
+
+      <div class="file-info" id="fileInfo">
+        <div class="file-thumb">PDF</div>
+        <div class="file-details">
+          <h4 id="fileName">filename.pdf</h4>
+          <p id="fileMeta">2.4 MB • 12 Pages</p>
+        </div>
+        <button class="remove-btn" id="removeFile">✕</button>
+      </div>
+
+      <button id="startBtn" class="start-btn">
+        Translate to Hindi →
+      </button>
+    </div>
+
+    <!-- STATE 2: PROCESSING -->
+    <div class="process-ui" id="ui-process">
+      <div class="status-header">
+        <div class="spinner"></div>
+        <div class="status-text">
+          <h3 id="processTitle">Initializing Engine...</h3>
+          <p id="processSub">Please wait</p>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="log-area" id="logArea"></div>
+    </div>
+
+    <!-- STATE 3: RESULT -->
+    <div class="result-ui" id="ui-result">
+      <div class="result-icon">✓</div>
+      <h2 class="result-title">Translation Complete</h2>
+      <p class="result-sub" id="resultMeta">Your document is ready.</p>
+      <button class="download-btn" id="downloadBtn">
+        ⬇ Download Professional Hindi PDF
+      </button>
+      <button id="resetBtn" class="reset-btn">Translate another document</button>
+    </div>
+
+  </div>
+</section>
+
+<footer class="footer">
+  © 2025 VakyaAI • Built for Bharat 🇮🇳
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   CORE LOGIC
+═══════════════════════════════════════════════════════ */
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+const UI = {
+  upload: $('ui-upload'),
+  process: $('ui-process'),
+  result: $('ui-result'),
+  dropZone: $('dropZone'),
+  fileInput: $('fileInput'),
+  fileInfo: $('fileInfo'),
+  fileName: $('fileName'),
+  fileMeta: $('fileMeta'),
+  removeFile: $('removeFile'),
+  startBtn: $('startBtn'),
+  progressBar: $('progressBar'),
+  logArea: $('logArea'),
+  processTitle: $('processTitle'),
+  processSub: $('processSub'),
+  resultMeta: $('resultMeta'),
+  downloadBtn: $('downloadBtn'),
+  resetBtn: $('resetBtn')
+};
+
+let currentFile = null;
+let pdfDoc = null;
+let translatedChunks = [];
+let finalBlob = null;
+
+// --- UI SWITCHING ---
+function showUI(state) {
+  UI.upload.style.display = state === 'upload' ? 'block' : 'none';
+  UI.process.style.display = state === 'process' ? 'block' : 'none';
+  UI.result.style.display = state === 'result' ? 'block' : 'none';
+}
+function log(msg) {
+  const el = document.createElement('div');
+  el.className = 'log-entry latest';
+  el.textContent = `> ${msg}`;
+  if (UI.logArea.firstChild) UI.logArea.firstChild.classList.remove('latest');
+  UI.logArea.prepend(el);
+}
+
+// --- FILE HANDLING ---
+// Fix: Listen for change on the INPUT, not just the zone
+UI.fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  if (!file || file.type !== 'application/pdf') {
+    alert('Please select a valid PDF file.');
+    return;
+  }
+  currentFile = file;
+  UI.fileName.textContent = file.name;
+  UI.fileMeta.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+  UI.fileInfo.classList.add('active');
+  UI.startBtn.classList.add('active');
+  log(`File selected: ${file.name}`);
+}
+
+// Drag & Drop Logic
+UI.dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  UI.dropZone.classList.add('dragging');
+});
+UI.dropZone.addEventListener('dragleave', () => {
+  UI.dropZone.classList.remove('dragging');
+});
+UI.dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  UI.dropZone.classList.remove('dragging');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+// Remove File
+UI.removeFile.addEventListener('click', (e) => {
+  e.preventDefault(); // Prevent triggering file input again
+  currentFile = null;
+  UI.fileInfo.classList.remove('active');
+  UI.startBtn.classList.remove('active');
+  UI.fileInput.value = ''; // Reset input
+});
+
+// Start Process
+UI.startBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  showUI('process');
+  await runTranslation();
+});
+
+// Reset
+UI.resetBtn.addEventListener('click', () => {
+  currentFile = null;
+  finalBlob = null;
+  translatedChunks = [];
+  UI.logArea.innerHTML = '';
+  showUI('upload');
+});
+
+// --- TRANSLATION ENGINE ---
+async function runTranslation() {
+  UI.processTitle.textContent = "Scanning PDF...";
+  UI.progressBar.style.width = '5%';
+  log("Loading PDF into memory...");
+
+  try {
+    const arrBuff = await currentFile.arrayBuffer();
+    pdfDoc = await pdfjsLib.getDocument({ data: arrBuff }).promise;
+    const numPages = pdfDoc.numPages;
+    translatedChunks = [];
+    
+    log(`Found ${numPages} pages.`);
+
+    for (let i = 1; i <= numPages; i++) {
+      UI.processSub.textContent = `Processing Page ${i} of ${numPages}`;
+      log(`Extracting text from Page ${i}...`);
+      
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      
+      // Reconstruct text with line breaks
+      let text = '';
+      let lastY = null;
+      textContent.items.forEach(item => {
+        if (!item.str) return;
+        const y = item.transform[5];
+        if (lastY !== null && Math.abs(y - lastY) > 5) text += '\n';
+        text += item.str + ' ';
+        lastY = y;
+      });
+
+      const cleanText = text.replace(/\s+/g, ' ').trim();
+      UI.processTitle.textContent = "Translating to Hindi...";
+      log(`Translating Page ${i}...`);
+      
+      const hindiText = await translateText(cleanText);
+      translatedChunks.push(hindiText);
+      
+      const progress = ((i / numPages) * 90) + 5;
+      UI.progressBar.style.width = `${progress}%`;
+    }
+
+    log("Building Professional PDF...");
+    UI.processTitle.textContent = "Generating Document";
+    UI.processSub.textContent = "This may take a moment for layout calculation.";
+    
+    await generatePDF();
+
+    UI.progressBar.style.width = '100%';
+    log("Done!");
+    
+    setTimeout(() => {
+      UI.resultMeta.textContent = `${numPages} pages translated successfully.`;
+      showUI('result');
+    }, 500);
+
+  } catch (err) {
+    console.error(err);
+    log(`Error: ${err.message}`);
+    alert("An error occurred: " + err.message);
+    showUI('upload');
+  }
+}
+
+async function translateText(text) {
+  if (!text) return '';
+  const chunkSize = 4500;
+  if (text.length <= chunkSize) return await gTrans(text);
+  
+  // Chunk large text
+  const parts = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    parts.push(text.slice(i, i + chunkSize));
+  }
+  const translated = [];
+  for (const p of parts) {
+    translated.push(await gTrans(p));
+    await new Promise(r => setTimeout(r, 100)); // polite delay
+  }
+  return translated.join(' ');
+}
+
+async function gTrans(txt) {
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q=${encodeURIComponent(txt)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data[0].map(i => i[0]).join('');
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROFESSIONAL PDF GENERATOR v2.0
+═══════════════════════════════════════════════════════ */
+function arrayBufferToBase64( buffer ) {
+  let binary = '';
+  const bytes = new Uint8Array( buffer );
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) binary += String.fromCharCode( bytes[ i ] );
+  return window.btoa( binary );
+}
+
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  
+  const W = 595.28, H = 841.89;
+  const MARGIN = 60;
+  const MAX_Y = H - MARGIN - 40; // Footer space
+  const LINE_HEIGHT = 18; // Optimal for Hindi
+  const PARA_SPACE = 10;
+  const CONTENT_W = W - (MARGIN * 2);
+
+  // Load Hindi Font
+  const fontUrl = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf';
+  const fontResp = await fetch(fontUrl);
+  const fontB64 = arrayBufferToBase64(await fontResp.arrayBuffer());
+  doc.addFileToVFS('NotoSansDevanagari-Regular.ttf', fontB64);
+  doc.addFont('NotoSansDevanagari-Regular.ttf', 'NotoSansDevanagari', 'normal');
+  doc.setFont('NotoSansDevanagari');
+
+  // --- COVER PAGE ---
+  doc.setFillColor(240, 248, 255);
+  doc.rect(0, 0, W, H, 'F');
+  
+  doc.setFillColor(14, 165, 233); // Accent Bar
+  doc.rect(0, 0, W, 12, 'F');
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(10);
+  doc.text('PROFESSIONAL TRANSLATION', MARGIN, 80);
+
+  doc.setFontSize(38);
+  doc.text('हिंदी अनुवाद', MARGIN, 150);
+
+  doc.setFontSize(12);
+  doc.setTextColor(100);
+  doc.text(`Source: ${currentFile.name}`, MARGIN, 200);
+  doc.text(`Pages: ${pdfDoc.numPages}`, MARGIN, 220);
+  doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, MARGIN, 240);
+  
+  doc.setFontSize(10);
+  doc.text('Generated by VakyaAI Engine', MARGIN, H - 60);
+
+  // --- LAYOUT STATE ---
+  let y = MARGIN;
+  let pageNum = 1;
+
+  function addPage() {
+    doc.addPage();
+    pageNum++;
+    y = MARGIN;
+    
+    // Page Header
+    doc.setFontSize(8);
+    doc.setTextColor(180);
+    doc.text('VakyaAI Translation', MARGIN, 30);
+    doc.text(`Page ${pageNum}`, W - MARGIN, 30, {align: 'right'});
+    
+    // Top Line
+    doc.setDrawColor(220);
+    doc.line(MARGIN, 40, W - MARGIN, 40);
+    y = 60;
+  }
+
+  // Start first page
+  addPage();
+
+  // --- CONTENT FLOW ---
+  for (let i = 0; i < translatedChunks.length; i++) {
+    const content = translatedChunks[i];
+    const paragraphs = content.split('\n');
+
+    // Page Separator for Original Pages
+    doc.setFontSize(9);
+    doc.setTextColor(14, 165, 233); // Accent
+    doc.text(`—— Original Page ${i+1} ——`, W/2, y, {align: 'center'});
+    y += 25;
+    doc.setTextColor(30, 30, 30); // Reset to black
+
+    for (let p of paragraphs) {
+      const cleanP = p.trim();
+      if (!cleanP) { y += 5; continue; }
+
+      // Simple Heading Logic: Short lines, ends without punctuation
+      const isHeading = cleanP.length < 50 && !/[.?।,]/.test(cleanP.slice(-1));
+
+      if (isHeading) {
+        doc.setFontSize(14);
+        doc.setTextColor(15, 23, 42); // Darker
+      } else {
+        doc.setFontSize(11);
+        doc.setTextColor(50, 50, 50); // Body color
+      }
+
+      const lines = doc.splitTextToSize(cleanP, CONTENT_W);
+      
+      for (let line of lines) {
+        if (y > MAX_Y) addPage();
+        doc.text(line, MARGIN, y);
+        y += (isHeading ? 22 : LINE_HEIGHT); // More space for headings
+      }
+      y += PARA_SPACE; // Paragraph gap
+    }
+    y += 10; // Extra space between original pages
+  }
+
+  finalBlob = doc.output('blob');
+}
+
+// --- DOWNLOAD ---
+UI.downloadBtn.addEventListener('click', () => {
+  if (!finalBlob) return;
+  const url = URL.createObjectURL(finalBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentFile.name.replace('.pdf', '')}_Hindi.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+</script>
+</body>
+</html>
